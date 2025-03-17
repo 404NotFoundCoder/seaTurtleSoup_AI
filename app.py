@@ -1,7 +1,7 @@
 from flask import Flask, jsonify, request
 
-from config import AI_PLAYERS
-from services.ai_player import generate_ai_player
+from services.player.ai_player import generate_ai_player
+from services.player.player_config import AI_PLAYERS
 from services.turtle_soup import (
     evaluate_turtle_soup,
     generate_turtle_soup,

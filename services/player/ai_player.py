@@ -2,8 +2,9 @@ import json
 
 from groq import Groq
 
-from config import AI_PLAYERS, GROQ_API_KEY
+from config import GROQ_API_KEY
 from models import TurtleSoupGuess, TurtleSoupStory
+from services.player.player_config import AI_PLAYERS
 
 # 初始化Groq客戶端
 client = Groq(api_key=GROQ_API_KEY)

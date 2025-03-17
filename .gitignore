@@ -3,3 +3,5 @@
 # env files (can opt-in for committing if needed)
 .env
 
+# Python bytecode files
+__pycache__/
