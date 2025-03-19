@@ -77,5 +77,5 @@ def judge_turtle_soup(
         json_data = json.loads(response_content)
         return TurtleSoupJudge(**json_data)
     except Exception as e:
-        print(f"評估海龜湯時發生錯誤: {e}")
+        print(f"判斷是否成功解謎海龜湯時發生錯誤: {e}")
         raise

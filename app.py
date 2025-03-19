@@ -1,5 +1,6 @@
 from flask import Flask, jsonify, request
 
+from models import TurtleSoupStory
 from services.player.ai_player import generate_ai_player
 from services.player.player_config import AI_PLAYERS
 from services.turtle_soup import (
@@ -10,25 +11,14 @@ from services.turtle_soup import (
 
 app = Flask(__name__)
 
-# 全局變量存儲當前謎題和猜測歷史
-soup = None
-correct_guesses = []
-not_correct_guesses = []
-not_important_guesses = []
-
 
 @app.route("/api/soup", methods=["POST"])
 def create_turtle_soup():
     """生成新的海龜湯謎題"""
-    global soup, correct_guesses, not_correct_guesses, not_important_guesses
 
     try:
         soup = generate_turtle_soup()
-        # 重置猜測歷史
-        correct_guesses = []
-        not_correct_guesses = []
-        not_important_guesses = []
-        print(soup)
+
         return jsonify(
             {
                 "status": "success",
@@ -45,20 +35,44 @@ def create_turtle_soup():
 @app.route("/api/evaluate", methods=["POST"])
 def evaluate_and_judge():
     """評估玩家的猜測並判斷是否解開謎題"""
-    global soup, correct_guesses, not_correct_guesses, not_important_guesses
-
-    if not soup:
-        return jsonify({"status": "error", "message": "請先生成海龜湯謎題"}), 400
 
     try:
         data = request.get_json()
-        if not data or "guess" not in data:
-            return jsonify({"status": "error", "message": "請提供猜測內容"}), 400
 
+        # 檢查請求是否包含所有必要的參數
+        required_keys = [
+            "soup",
+            "correct_guesses",
+            "not_correct_guesses",
+            "not_important_guesses",
+            "guess",
+        ]
+        if not data or not all(key in data for key in required_keys):
+            return (
+                jsonify(
+                    {
+                        "status": "error",
+                        "message": f"請提供所有必要的參數: {required_keys}",
+                    }
+                ),
+                400,
+            )
+
+        # 從請求中提取數據
+        soup = TurtleSoupStory(**data["soup"])  # 轉換成 TurtleSoupStory 物件
+        correct_guesses = data["correct_guesses"]
+        not_correct_guesses = data["not_correct_guesses"]
+        not_important_guesses = data["not_important_guesses"]
         guess = data["guess"]
 
-        # 評估猜測
-        evaluation_result = evaluate_turtle_soup(soup, guess)
+        # **1. 評估猜測**
+        try:
+            evaluation_result = evaluate_turtle_soup(soup, guess)
+        except Exception as e:
+            return (
+                jsonify({"status": "error", "message": f"評估海龜湯時發生錯誤: {e}"}),
+                500,
+            )
 
         # 更新猜測歷史
         if evaluation_result.evaluation == "是":
@@ -68,15 +82,21 @@ def evaluate_and_judge():
         else:  # 不重要
             not_important_guesses.append(guess)
 
-        # 判斷是否解開謎題
-        judge_result = judge_turtle_soup(soup, correct_guesses)
+        # **2. 判斷是否解開謎題**
+        try:
+            judge_result = judge_turtle_soup(soup, correct_guesses)
+        except Exception as e:
+            return (
+                jsonify({"status": "error", "message": f"評估海龜湯時發生錯誤: {e}"}),
+                500,
+            )
 
         return jsonify(
             {
                 "status": "success",
                 "data": {
                     "evaluation": evaluation_result.evaluation,
-                    "judge": judge_result.judge,
+                    "judge": judge_result.judge == "pass",
                     "correct_guesses": correct_guesses,
                     "not_correct_guesses": not_correct_guesses,
                     "not_important_guesses": not_important_guesses,
@@ -93,21 +113,37 @@ def evaluate_and_judge():
 @app.route("/api/ai_player", methods=["POST"])
 def create_ai_player_guess():
     """創建AI玩家並生成猜測"""
-    global soup, correct_guesses, not_correct_guesses, not_important_guesses
-
-    if not soup:
-        return jsonify({"status": "error", "message": "請先生成海龜湯謎題"}), 400
 
     try:
         data = request.get_json()
 
-        # 檢查請求是否包含有效的資料和 'player_type'
-        if not data or "player_type" not in data:
-            return jsonify({"status": "error", "message": "請提供AI玩家類型"}), 400
+        # 檢查請求是否包含所有必要的參數
+        required_keys = [
+            "soup",
+            "player_type",
+            "correct_guesses",
+            "not_correct_guesses",
+            "not_important_guesses",
+        ]
+        if not data or not all(key in data for key in required_keys):
+            return (
+                jsonify(
+                    {
+                        "status": "error",
+                        "message": f"請提供所有必要的參數: {required_keys}",
+                    }
+                ),
+                400,
+            )
 
+        # 從請求中提取數據
+        soup = TurtleSoupStory(**data["soup"])  # 轉換成 TurtleSoupStory 物件
         player_type = data["player_type"]
+        correct_guesses = data["correct_guesses"]
+        not_correct_guesses = data["not_correct_guesses"]
+        not_important_guesses = data["not_important_guesses"]
 
-        # 檢查AI玩家類型是否有效
+        # 確保 player_type 在允許的 AI 玩家類型內
         if player_type not in AI_PLAYERS:
             return (
                 jsonify(
@@ -119,14 +155,22 @@ def create_ai_player_guess():
                 400,
             )
 
-        # 生成AI玩家猜測
-        guess_result = generate_ai_player(
-            soup,
-            player_type,
-            correct_guesses,
-            not_correct_guesses,
-            not_important_guesses,
-        )
+        # 生成AI玩家的猜測
+        try:
+            guess_result = generate_ai_player(
+                soup,
+                player_type,
+                correct_guesses,
+                not_correct_guesses,
+                not_important_guesses,
+            )
+        except Exception as e:
+            return (
+                jsonify(
+                    {"status": "error", "message": f"生成AI玩家猜測時發生錯誤: {e}"}
+                ),
+                500,
+            )
 
         return jsonify(
             {
